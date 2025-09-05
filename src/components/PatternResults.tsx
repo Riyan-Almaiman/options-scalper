@@ -32,7 +32,7 @@ interface PatternResultsProps {
   contractsCount?: number;
 }
 
-const PatternResults: React.FC<PatternResultsProps> = ({ patterns, stockData, onPatternClick, selectedPattern, contractsCount = 1 }) => {
+const PatternResults: React.FC<PatternResultsProps> = ({ patterns, onPatternClick, selectedPattern, contractsCount = 1 }) => {
   const successfulPatterns = patterns.filter(p => p.success);
   
   if (patterns.length === 0) {

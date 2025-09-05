@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Newspaper, ExternalLink, Clock, TrendingUp } from 'lucide-react';
+import { Newspaper, ExternalLink, Clock } from 'lucide-react';
 
 interface NewsItem {
   id: string;
@@ -68,20 +68,7 @@ const NewsFeed: React.FC<NewsFeedProps> = ({ ticker, apiKey }) => {
     }
   };
 
-  const getSentimentColor = (sentiment?: string) => {
-    if (!sentiment) return 'text-gray-400';
-    
-    switch (sentiment.toLowerCase()) {
-      case 'positive':
-      case 'bullish':
-        return 'text-green-400';
-      case 'negative':
-      case 'bearish':
-        return 'text-red-400';
-      default:
-        return 'text-gray-400';
-    }
-  };
+  
 
   return (
     <div className="h-full p-6 flex flex-col">

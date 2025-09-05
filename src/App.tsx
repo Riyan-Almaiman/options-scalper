@@ -1,8 +1,5 @@
-import React, { useState } from 'react';
-import { BarChart3, TrendingUp, Settings, Clock } from 'lucide-react';
-import TickerSelector from './components/TickerSelector';
-import ApiSetup from './components/ApiSetup';
-import PatternAnalyzer from './components/PatternAnalyzer';
+import { useState } from 'react';
+
 import PriceChart from './components/PriceChart';
 import SimplePatternList from './components/SimplePatternList';
 import NewsFeed from './components/NewsFeed';
@@ -31,7 +28,6 @@ interface Pattern {
 }
 
 function App() {
-  const [currentStep, setCurrentStep] = useState(1);
   const [selectedTicker, setSelectedTicker] = useState('');
   const [apiKey, setApiKey] = useState(() => {
     // Load saved API key from localStorage
@@ -47,7 +43,6 @@ function App() {
     yesterday.setDate(yesterday.getDate() - 1);
     return yesterday.toISOString().split('T')[0];
   });
-  const [viewingDate, setViewingDate] = useState<string>(''); // For multi-day navigation
 
   return (
     <div className="min-h-screen bg-gray-800 text-white flex">

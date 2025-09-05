@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, ComposedChart } from 'recharts';
-import { BarChart3, TrendingUp, TrendingDown } from 'lucide-react';
+import {  Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,  Bar, ComposedChart } from 'recharts';
+import { BarChart3} from 'lucide-react';
 
 interface StockData {
   timestamp: Date;
@@ -35,18 +35,15 @@ interface PriceChartProps {
   selectedDate?: string;
 }
 
-const PriceChart: React.FC<PriceChartProps> = ({ data, ticker, patterns, selectedPattern, contractsCount = 1, apiKey, selectedDate }) => {
-  const [timeframe, setTimeframe] = useState(5);
+const PriceChart: React.FC<PriceChartProps> = ({ data, ticker, selectedPattern, contractsCount = 1, apiKey, selectedDate }) => {
   const [showVolume, setShowVolume] = useState(true);
   const [viewMode, setViewMode] = useState<'stock' | 'option' | 'multi-day'>('stock');
   const [currentViewDate, setCurrentViewDate] = useState<string>('');
   const [multiDayData, setMultiDayData] = useState<StockData[]>([]);
-  const [loadingDay, setLoadingDay] = useState(false);
 
   const loadDifferentDay = async (dayOffset: number) => {
     if (!selectedPattern || !apiKey || !selectedDate) return;
     
-    setLoadingDay(true);
     try {
       // Calculate the target date
       const baseDate = new Date(selectedDate);
@@ -101,9 +98,8 @@ const PriceChart: React.FC<PriceChartProps> = ({ data, ticker, patterns, selecte
       console.log(`Loaded ${marketHoursData.length} data points for ${targetDate}`);
       
     } catch (error) {
-      alert(`❌ Error loading ${targetDate}: ${(error as Error).message}`);
+      alert(`❌ Error loading ${(error as Error).message}`);
     } finally {
-      setLoadingDay(false);
     }
   };
 
@@ -226,11 +222,7 @@ const PriceChart: React.FC<PriceChartProps> = ({ data, ticker, patterns, selecte
     return null;
   };
 
-  const timeframes = [
-    { value: 1, label: '1min' },
-    { value: 5, label: '5min' },
-    { value: 15, label: '15min' }
-  ];
+
 
   return (
     <div className="card">
