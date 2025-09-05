@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import {  Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,  Bar, ComposedChart } from 'recharts';
-import { BarChart3} from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, ComposedChart } from 'recharts';
+import { BarChart3, TrendingUp, TrendingDown } from 'lucide-react';
 
 interface StockData {
   timestamp: Date;
@@ -100,6 +100,55 @@ const PriceChart: React.FC<PriceChartProps> = ({ data, ticker, selectedPattern, 
     } catch (error) {
       alert(`❌ Error loading ${(error as Error).message}`);
     } finally {
+    }
+  };
+
+  const loadSpecificDay = async (targetDate: string) => {
+    if (!selectedPattern || !apiKey) return;
+    
+    try {
+      setCurrentViewDate(targetDate);
+      
+      // Fetch data for that specific day
+      const url = `https://api.polygon.io/v2/aggs/ticker/${ticker}/range/1/minute/${targetDate}/${targetDate}?adjusted=true&sort=asc&apikey=${apiKey}`;
+      
+      const response = await fetch(url);
+      const data = await response.json();
+      
+      if (data.status !== 'OK' && data.status !== 'DELAYED') {
+        throw new Error('No data for this date');
+      }
+      
+      if (!data.results || data.results.length === 0) {
+        alert('❌ No trading data for this date');
+        return;
+      }
+      
+      // Process the new day's data
+      const newDayData = data.results.map((item: any) => ({
+        timestamp: new Date(item.t),
+        open: item.o,
+        high: item.h,
+        low: item.l,
+        close: item.c,
+        volume: item.v,
+      }));
+      
+      // Filter for market hours
+      const marketHoursData = newDayData.filter((item: any) => {
+        const easternTime = new Date(item.timestamp.toLocaleString("en-US", {timeZone: "America/New_York"}));
+        const hour = easternTime.getHours();
+        const minute = easternTime.getMinutes();
+        const currentTime = hour * 60 + minute;
+        
+        return currentTime >= 570 && currentTime < 960; // 9:30 AM - 4:00 PM
+      });
+      
+      setMultiDayData(marketHoursData);
+      console.log(`Loaded ${marketHoursData.length} data points for ${targetDate}`);
+      
+    } catch (error) {
+      alert(`❌ Error loading ${targetDate}: ${(error as Error).message}`);
     }
   };
 
@@ -225,57 +274,65 @@ const PriceChart: React.FC<PriceChartProps> = ({ data, ticker, selectedPattern, 
 
 
   return (
-    <div className="card">
+    <div className="card h-full">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center">
           <BarChart3 className="w-5 h-5 mr-2 text-green-400" />
           <h3 className="text-lg font-semibold text-green-400">
             {viewMode === 'option' && selectedPattern 
-              ? `${contractsCount}x ${ticker} ${selectedPattern.direction} ${Math.round(selectedPattern.entryPrice)} Strike`
+              ? `${contractsCount}x ${ticker} ${selectedPattern.direction} $${Math.round(selectedPattern.entryPrice)} Option Price`
+              : viewMode === 'multi-day' && selectedPattern 
+              ? `${ticker} ${selectedPattern.direction} $${Math.round(selectedPattern.entryPrice)} Option - ${currentViewDate || selectedDate}`
               : `${ticker} Stock Price`
             }
           </h3>
-          {selectedPattern && viewMode === 'option' && (
-            <span className="ml-2 text-xs bg-green-400 text-black px-2 py-1 rounded">
-              ${contractsCount}x contracts = ${(selectedPattern.estimatedProfit * contractsCount).toFixed(0)} total profit
+          {selectedPattern && (viewMode === 'option' || viewMode === 'multi-day') && (
+            <span className="ml-2 text-xs bg-orange-400 text-black px-2 py-1 rounded">
+              🔶 Option Prices (Orange Line)
             </span>
           )}
         </div>
         
         <div className="flex items-center space-x-2">
           <button
-            onClick={() => setViewMode('stock')}
+            onClick={() => {
+              setViewMode('stock');
+              setCurrentViewDate('');
+            }}
             className={`px-3 py-1 rounded text-xs ${
-              viewMode === 'stock' ? 'bg-green-400 text-black' : 'bg-gray-800 text-gray-400'
+              viewMode === 'stock' ? 'bg-green-400 text-black' : 'bg-gray-600 text-white hover:bg-gray-500'
             }`}
           >
-            📈 Stock Price
+            📈 Stock
           </button>
           
           <button
-            onClick={() => setViewMode('option')}
+            onClick={() => {
+              setViewMode('option');
+              setCurrentViewDate('');
+            }}
             disabled={!selectedPattern}
             className={`px-3 py-1 rounded text-xs ${
-              viewMode === 'option' && selectedPattern ? 'bg-orange-400 text-black' : 'bg-gray-800 text-gray-400'
-            } disabled:opacity-50`}
+              viewMode === 'option' && selectedPattern ? 'bg-orange-400 text-black' : 'bg-gray-600 text-white hover:bg-gray-500'
+            } disabled:opacity-50 disabled:cursor-not-allowed`}
           >
-            💰 Option (This Day)
+            🔶 Option
           </button>
           
           <button
             onClick={() => setViewMode('multi-day')}
             disabled={!selectedPattern}
             className={`px-3 py-1 rounded text-xs ${
-              viewMode === 'multi-day' && selectedPattern ? 'bg-purple-400 text-black' : 'bg-gray-800 text-gray-400'
-            } disabled:opacity-50`}
+              viewMode === 'multi-day' && selectedPattern ? 'bg-purple-400 text-black' : 'bg-gray-600 text-white hover:bg-gray-500'
+            } disabled:opacity-50 disabled:cursor-not-allowed`}
           >
-            📊 Multi-Day Pattern
+            📅 Other Days
           </button>
           
           <button
             onClick={() => setShowVolume(!showVolume)}
             className={`px-3 py-1 rounded text-xs ${
-              showVolume ? 'bg-blue-400 text-black' : 'bg-gray-800 text-gray-400'
+              showVolume ? 'bg-blue-400 text-black' : 'bg-gray-600 text-white hover:bg-gray-500'
             }`}
           >
             Volume
@@ -283,53 +340,57 @@ const PriceChart: React.FC<PriceChartProps> = ({ data, ticker, selectedPattern, 
         </div>
       </div>
 
-      {/* Day Navigation for Multi-Day View */}
-      {viewMode === 'multi-day' && selectedPattern && (
+      {/* Date Selector for Multi-Day View */}
+      {selectedPattern && (
         <div className="mb-4 p-3 bg-gray-700 rounded-lg">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <span className="text-sm text-gray-400">Navigate Days:</span>
-              <button
-                onClick={() => loadDifferentDay(-7)}
-                className="px-2 py-1 bg-gray-600 rounded text-xs hover:bg-gray-500"
-              >
-                ← 1 Week Before
-              </button>
-              <button
-                onClick={() => loadDifferentDay(-1)}
-                className="px-2 py-1 bg-gray-600 rounded text-xs hover:bg-gray-500"
-              >
-                ← Previous Day
-              </button>
-              <button
-                onClick={() => loadDifferentDay(1)}
-                className="px-2 py-1 bg-gray-600 rounded text-xs hover:bg-gray-500"
-              >
-                Next Day →
-              </button>
-              <button
-                onClick={() => loadDifferentDay(7)}
-                className="px-2 py-1 bg-gray-600 rounded text-xs hover:bg-gray-500"
-              >
-                1 Week After →
-              </button>
+            <div className="flex items-center space-x-3">
+              <span className="text-sm text-gray-400">View Date:</span>
+              <input
+                type="date"
+                value={currentViewDate || selectedDate}
+                onChange={(e) => {
+                  setCurrentViewDate(e.target.value);
+                  loadSpecificDay(e.target.value);
+                }}
+                className="input-field text-sm py-1 px-2"
+              />
+              
+              <div className="flex space-x-1">
+                <button
+                  onClick={() => loadDifferentDay(-1)}
+                  className="px-2 py-1 bg-gray-600 rounded text-xs hover:bg-gray-500"
+                >
+                  ← Prev Day
+                </button>
+                <button
+                  onClick={() => loadDifferentDay(1)}
+                  className="px-2 py-1 bg-gray-600 rounded text-xs hover:bg-gray-500"
+                >
+                  Next Day →
+                </button>
+              </div>
             </div>
-            <div className="text-sm text-purple-400 font-bold">
-              Viewing: {currentViewDate || selectedDate}
+            
+            <div className="text-sm">
+              <span className="text-gray-400">Showing:</span>
+              <span className="ml-1 text-purple-400 font-bold">
+                {viewMode === 'stock' ? 'Stock Prices' : 'Option Prices'}
+              </span>
             </div>
           </div>
         </div>
       )}
 
       {chartData.length === 0 ? (
-        <div className="h-96 flex items-center justify-center text-gray-400 bg-gray-800 rounded-lg">
+        <div className="bg-gray-800 rounded-lg flex items-center justify-center text-gray-400" style={{ height: 'calc(100% - 120px)' }}>
           <div className="text-center">
             <BarChart3 className="w-12 h-12 mx-auto mb-4 opacity-50" />
             <p>No chart data available</p>
           </div>
         </div>
       ) : (
-        <div className="h-96 bg-gray-800 rounded-lg p-2">
+        <div className="bg-gray-800 rounded-lg p-2" style={{ height: 'calc(100% - 120px)' }}>
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={chartData} margin={{ top: 10, right: 30, left: 20, bottom: 10 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" />

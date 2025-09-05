@@ -51,9 +51,21 @@ function App() {
       <div className="flex-1 p-4">
         
         {/* Simple Top Bar */}
-        <div className="flex items-center justify-between mb-6 bg-gray-700 rounded-lg p-4">
+        <div className="flex items-center justify-between mb-4 bg-gray-700 rounded-lg p-4">
           <div className="flex items-center space-x-4">
             <h1 className="text-xl font-bold text-green-400">⚡ 0DTE Scalper</h1>
+            
+            {/* Show current price when data loaded */}
+            {stockData.length > 0 && (
+              <div className="bg-gray-600 rounded-lg px-4 py-2">
+                <span className="text-white font-bold text-lg">
+                  {selectedTicker} ${stockData[stockData.length - 1]?.close.toFixed(2)}
+                </span>
+                <span className="text-gray-400 text-sm ml-2">
+                  • Vol: {stockData[stockData.length - 1]?.volume.toLocaleString()}
+                </span>
+              </div>
+            )}
             
             {/* Quick Setup */}
             <div className="flex items-center space-x-3">
@@ -210,43 +222,13 @@ function App() {
           </button>
         </div>
 
-        {/* Current Price Display */}
-        {stockData.length > 0 && (
-          <div className="bg-gray-700 rounded-lg p-6 mb-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-3xl font-bold text-white">
-                  {selectedTicker} 
-                  <span className="text-green-400 ml-2">
-                    ${stockData[stockData.length - 1]?.close.toFixed(2)}
-                  </span>
-                </h2>
-                <p className="text-gray-400">
-                  Last: {stockData[stockData.length - 1]?.timestamp.toLocaleString("en-US", {
-                    timeZone: "America/New_York",
-                    month: 'short',
-                    day: 'numeric',
-                    hour: 'numeric',
-                    minute: '2-digit'
-                  })} EST
-                </p>
-              </div>
-              <div className="text-right">
-                <div className="text-sm text-gray-400">Volume</div>
-                <div className="text-lg font-bold">
-                  {stockData[stockData.length - 1]?.volume.toLocaleString()}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Main Trading Dashboard */}
         {stockData.length > 0 && (
-          <div className="grid grid-cols-3 gap-4 h-[calc(100vh-120px)]">
+          <div className="grid grid-cols-4 gap-4 h-[calc(100vh-200px)]">
             
-            {/* Left - Chart (Takes up 2 columns) */}
-            <div className="col-span-2">
+            {/* Left - Chart (Takes up 3 columns - Much Bigger!) */}
+            <div className="col-span-3">
               <PriceChart 
                 data={stockData}
                 ticker={selectedTicker}
@@ -258,7 +240,7 @@ function App() {
               />
             </div>
 
-            {/* Right - Pattern List (1 column) */}
+            {/* Right - Pattern List (1 column - Fixed Height) */}
             <div className="col-span-1">
               {patterns.length > 0 ? (
                 <div>

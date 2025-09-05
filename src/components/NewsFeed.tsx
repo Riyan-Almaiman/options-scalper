@@ -128,7 +128,7 @@ const NewsFeed: React.FC<NewsFeedProps> = ({ ticker, apiKey }) => {
       )}
 
       {/* News Items */}
-      <div className="flex-1 overflow-y-auto space-y-3 pr-2">
+      <div className="h-[calc(100vh-300px)] overflow-y-auto space-y-3 pr-2">
         {news.map((item) => (
           <div 
             key={item.id}

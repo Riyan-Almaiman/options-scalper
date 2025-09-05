@@ -43,14 +43,14 @@ const SimplePatternList: React.FC<SimplePatternListProps> = ({
   }
 
   return (
-    <div className="bg-gray-700 rounded-lg p-4 h-full flex flex-col">
+    <div className="bg-gray-700 rounded-lg p-4">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-bold text-green-400">
           💰 Profitable Trades ({successfulPatterns.length})
         </h3>
       </div>
       
-      <div className="flex-1 overflow-y-auto space-y-2">
+      <div className="space-y-2 h-[calc(100vh-300px)] overflow-y-auto">
         {successfulPatterns.slice(0, 15).map((pattern, index) => {
           // Calculate realistic option prices
           const strikePrice = Math.round(pattern.entryPrice);
