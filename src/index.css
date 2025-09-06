@@ -60,4 +60,22 @@
   .pattern-card-bearish {
     @apply border-l-red-400;
   }
+  
+  .slider-vertical {
+    writing-mode: bt-lr;
+    -webkit-appearance: slider-vertical;
+    width: 20px;
+    height: 200px;
+    background: #4B5563;
+    outline: none;
+  }
+  
+  .slider-vertical::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 20px;
+    height: 15px;
+    background: #10B981;
+    border-radius: 3px;
+    cursor: pointer;
+  }
 }

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { BarChart3, ArrowLeft, ArrowRight } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Brush } from 'recharts';
 
 interface VolatileDay {
   date: string;
@@ -40,6 +40,14 @@ const DayAnalysis: React.FC<DayAnalysisProps> = ({
   const [availableOptions, setAvailableOptions] = useState<any[]>([]);
   const [contracts, setContracts] = useState(1);
   const [chartMode, setChartMode] = useState<'stock' | 'option'>('stock');
+  const [viewMode, setViewMode] = useState<'single' | 'multi'>('single');
+  const [multiDayData, setMultiDayData] = useState<any[]>([]);
+  // Removed unused yAxisZoom
+  const [fullDayData, setFullDayData] = useState<any[]>([]); // Store complete day data
+  const [brushDomain, setBrushDomain] = useState<{start: number, end: number} | null>(null);
+  const [manualYAxis, setManualYAxis] = useState<{min: number, max: number} | null>(null);
+  const [yAxisMin, setYAxisMin] = useState(0);
+  const [yAxisMax, setYAxisMax] = useState(1000);
 
   // Load minute data for any specific date
   const loadDayData = async (targetDate: string) => {
@@ -134,6 +142,8 @@ const DayAnalysis: React.FC<DayAnalysisProps> = ({
         };
       });
 
+      // Store full day data - chart will always show this complete dataset
+      setFullDayData(chartPoints);
       setChartData(chartPoints);
       
     } catch (error) {
@@ -164,10 +174,49 @@ const DayAnalysis: React.FC<DayAnalysisProps> = ({
     setAvailableOptions(strikes);
   }, [volatileDay]);
 
-  // Load data when component mounts or viewing date changes (NOT when contracts change)
+  // Load data when component mounts or viewing date changes 
   useEffect(() => {
     loadDayData(viewingDate);
   }, [viewingDate, ticker, apiKey, chartMode]);
+  
+  // Quick zoom presets - start from beginning of day
+  const setQuickZoom = (minutes: number) => {
+    if (!fullDayData.length) return;
+    
+    const startIndex = 0; // Start from market open (9:30 AM)
+    const endIndex = Math.min(fullDayData.length - 1, minutes); // Show 'minutes' number of data points
+    
+    console.log(`Quick zoom ${minutes}min: showing indices ${startIndex} to ${endIndex} (${endIndex - startIndex + 1} data points)`);
+    
+    setBrushDomain({
+      start: startIndex,
+      end: endIndex
+    });
+  };
+
+  // Initialize Y-axis range when data loads
+  useEffect(() => {
+    if (fullDayData.length > 0 && !manualYAxis) {
+      const prices = fullDayData.map(d => d.price);
+      const minPrice = Math.min(...prices);
+      const maxPrice = Math.max(...prices);
+      setYAxisMin(minPrice - 1);
+      setYAxisMax(maxPrice + 1);
+    }
+  }, [fullDayData]);
+
+  // Get Y-axis domain - use manual if set, otherwise auto
+  const getYAxisDomain = () => {
+    if (manualYAxis) {
+      return [manualYAxis.min, manualYAxis.max];
+    }
+    
+    if (chartMode === 'option') {
+      return ['dataMin - 0.1', 'dataMax + 0.1'];
+    }
+    
+    return ['dataMin - 2', 'dataMax + 2'];
+  };
   
   // Separate effect for when option selection changes
   useEffect(() => {
@@ -198,6 +247,74 @@ const DayAnalysis: React.FC<DayAnalysisProps> = ({
     
     setViewingDate(newDate.toISOString().split('T')[0]);
   };
+
+  // Load multiple days of data for X-axis extension
+  const loadMultiDayRange = async (totalDays: number) => {
+    if (!ticker || !apiKey) return;
+    
+    setLoading(true);
+    try {
+      const allData: any[] = [];
+      const startDate = new Date(viewingDate);
+      
+      // Load consecutive trading days
+      for (let i = 0; i < totalDays; i++) {
+        const targetDate = new Date(startDate);
+        targetDate.setDate(targetDate.getDate() + i);
+        
+        // Skip weekends
+        const dayOfWeek = targetDate.getDay();
+        if (dayOfWeek === 0 || dayOfWeek === 6) {
+          totalDays++; // Add extra day to compensate for weekend
+          continue;
+        }
+        
+        const dateStr = targetDate.toISOString().split('T')[0];
+        
+        try {
+          const url = `https://api.polygon.io/v2/aggs/ticker/${ticker}/range/1/minute/${dateStr}/${dateStr}?adjusted=true&sort=asc&apikey=${apiKey}`;
+          const response = await fetch(url);
+          const data = await response.json();
+          
+          if (data.status === 'OK' || data.status === 'DELAYED') {
+            const dayData = data.results?.map((item: any) => ({
+              timestamp: new Date(item.t),
+              close: item.c,
+              volume: item.v,
+              time: new Date(item.t).toLocaleString("en-US", {
+                timeZone: "America/New_York",
+                month: 'short',
+                day: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit'
+              }),
+              price: item.c
+            })).filter((item: any) => {
+              const easternTime = new Date(item.timestamp.toLocaleString("en-US", {timeZone: "America/New_York"}));
+              const hour = easternTime.getHours();
+              const minute = easternTime.getMinutes();
+              const currentTime = hour * 60 + minute;
+              return currentTime >= 570 && currentTime < 960;
+            }) || [];
+            
+            allData.push(...dayData);
+          }
+        } catch (error) {
+          console.log(`No data for ${dateStr}`);
+        }
+      }
+      
+      setMultiDayData(allData);
+      setFullDayData(allData); // Update full day data for brush
+      
+    } catch (error) {
+      alert(`❌ Error loading multi-day data: ${(error as Error).message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -268,26 +385,181 @@ const DayAnalysis: React.FC<DayAnalysisProps> = ({
             <div className="flex items-center space-x-2">
               <button
                 onClick={() => {
+                  setViewMode('single');
                   setChartMode('stock');
-                  loadDayData(viewingDate); // Reload with stock mode
+                  loadDayData(viewingDate);
                 }}
                 className={`px-3 py-1 rounded text-sm ${
-                  chartMode === 'stock' ? 'bg-green-400 text-black' : 'bg-gray-600 text-white hover:bg-gray-500'
+                  viewMode === 'single' && chartMode === 'stock' ? 'bg-green-400 text-black' : 'bg-gray-600 text-white hover:bg-gray-500'
                 }`}
               >
-                📈 Stock Price
+                📈 Stock
               </button>
+              
               <button
                 onClick={() => {
+                  setViewMode('single');
                   setChartMode('option');
-                  loadDayData(viewingDate); // Reload with option mode
+                  loadDayData(viewingDate);
                 }}
                 disabled={!selectedOption}
                 className={`px-3 py-1 rounded text-sm ${
-                  chartMode === 'option' && selectedOption ? 'bg-orange-400 text-black' : 'bg-gray-600 text-gray-400'
+                  viewMode === 'single' && chartMode === 'option' && selectedOption ? 'bg-orange-400 text-black' : 'bg-gray-600 text-gray-400'
                 } disabled:opacity-50 disabled:cursor-not-allowed`}
               >
-                🔶 Option Price
+                🔶 Option
+              </button>
+              
+              <select
+                onChange={(e) => {
+                  const days = parseInt(e.target.value);
+                  if (days === 1) {
+                    setViewMode('single');
+                    loadDayData(viewingDate);
+                  } else {
+                    setViewMode('multi');
+                    loadMultiDayRange(days);
+                  }
+                }}
+                className="input-field text-sm py-1 px-2"
+              >
+                <option value={1}>1 Day</option>
+                <option value={3}>3 Days</option>
+                <option value={5}>5 Days</option>
+                <option value={7}>1 Week</option>
+                <option value={14}>2 Weeks</option>
+              </select>
+              
+              {/* Price Range Sliders - Based on Current Time Selection */}
+              {brushDomain && (
+                <div className="flex items-center space-x-2 ml-4">
+                  <span className="text-gray-400 text-xs">Focus:</span>
+                  <div className="flex items-center space-x-1">
+                    <span className="text-xs text-blue-400">Min:</span>
+                    <input
+                      type="range"
+                      min={(() => {
+                        const selectedData = fullDayData.slice(brushDomain.start, brushDomain.end + 1);
+                        const prices = selectedData.map(d => d.price);
+                        return Math.min(...prices);
+                      })()}
+                      max={(() => {
+                        const selectedData = fullDayData.slice(brushDomain.start, brushDomain.end + 1);
+                        const prices = selectedData.map(d => d.price);
+                        return Math.max(...prices);
+                      })()}
+                      step="0.001"
+                      value={yAxisMin}
+                      onChange={(e) => {
+                        const newMin = parseFloat(e.target.value);
+                        setYAxisMin(newMin);
+                        setManualYAxis({
+                          min: newMin,
+                          max: yAxisMax
+                        });
+                      }}
+                      className="w-20"
+                    />
+                    <span className="text-xs text-white font-mono w-14">
+                      ${yAxisMin.toFixed(3)}
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center space-x-1">
+                    <span className="text-xs text-blue-400">Max:</span>
+                    <input
+                      type="range"
+                      min={(() => {
+                        const selectedData = fullDayData.slice(brushDomain.start, brushDomain.end + 1);
+                        const prices = selectedData.map(d => d.price);
+                        return Math.min(...prices);
+                      })()}
+                      max={(() => {
+                        const selectedData = fullDayData.slice(brushDomain.start, brushDomain.end + 1);
+                        const prices = selectedData.map(d => d.price);
+                        return Math.max(...prices);
+                      })()}
+                      step="0.001"
+                      value={yAxisMax}
+                      onChange={(e) => {
+                        const newMax = parseFloat(e.target.value);
+                        setYAxisMax(newMax);
+                        setManualYAxis({
+                          min: yAxisMin,
+                          max: newMax
+                        });
+                      }}
+                      className="w-20"
+                    />
+                    <span className="text-xs text-white font-mono w-14">
+                      ${yAxisMax.toFixed(3)}
+                    </span>
+                  </div>
+                  
+                  <button
+                    onClick={() => {
+                      setManualYAxis(null);
+                      // Reset to selected time range bounds
+                      const selectedData = fullDayData.slice(brushDomain.start, brushDomain.end + 1);
+                      const prices = selectedData.map(d => d.price);
+                      setYAxisMin(Math.min(...prices));
+                      setYAxisMax(Math.max(...prices));
+                    }}
+                    className="px-2 py-1 bg-blue-500 text-white rounded text-xs hover:bg-blue-400"
+                  >
+                    Reset
+                  </button>
+                </div>
+              )}
+            </div>
+            
+            {/* Quick Time Zoom Buttons */}
+            <div className="flex items-center justify-center space-x-1 mt-4">
+              <span className="text-gray-400 text-xs mr-2">Quick Zoom:</span>
+              
+              <button
+                onClick={() => {
+                  setBrushDomain(null);
+                  setManualYAxis(null);
+                }}
+                className="px-2 py-1 bg-gray-600 text-white rounded text-xs hover:bg-gray-500"
+              >
+                Reset
+              </button>
+              
+              <button
+                onClick={() => setQuickZoom(5)}
+                className="px-2 py-1 bg-blue-500 text-white rounded text-xs hover:bg-blue-400"
+              >
+                5min
+              </button>
+              
+              <button
+                onClick={() => setQuickZoom(15)}
+                className="px-2 py-1 bg-blue-500 text-white rounded text-xs hover:bg-blue-400"
+              >
+                15min
+              </button>
+              
+              <button
+                onClick={() => setQuickZoom(30)}
+                className="px-2 py-1 bg-blue-500 text-white rounded text-xs hover:bg-blue-400"
+              >
+                30min
+              </button>
+              
+              <button
+                onClick={() => setQuickZoom(60)}
+                className="px-2 py-1 bg-blue-500 text-white rounded text-xs hover:bg-blue-400"
+              >
+                1hr
+              </button>
+              
+              <button
+                onClick={() => setQuickZoom(120)}
+                className="px-2 py-1 bg-blue-500 text-white rounded text-xs hover:bg-blue-400"
+              >
+                2hr
               </button>
             </div>
           </div>
@@ -341,21 +613,48 @@ const DayAnalysis: React.FC<DayAnalysisProps> = ({
             </div>
           ) : (
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData} margin={{ top: 10, right: 30, left: 20, bottom: 10 }}>
+              <LineChart 
+                data={viewMode === 'multi' ? multiDayData : chartData} 
+                margin={{ top: 10, right: 30, left: 20, bottom: 50 }}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                <XAxis dataKey="time" tick={{ fontSize: 11, fill: '#9CA3AF' }} />
+                <XAxis 
+                  dataKey="time" 
+                  tick={{ fontSize: 10, fill: '#9CA3AF' }}
+                  height={40}
+                />
                 <YAxis 
                   tick={{ fontSize: 11, fill: '#9CA3AF' }} 
                   tickFormatter={(value) => `$${value.toFixed(2)}`}
-                  domain={chartMode === 'stock' ? ['dataMin - 2', 'dataMax + 2'] : ['dataMin - 0.1', 'dataMax + 0.1']}
+                  domain={getYAxisDomain()}
+                  tickCount={8}
                 />
                 <Tooltip content={<CustomTooltip />} />
                 <Line 
                   type="monotone" 
-                  dataKey="price" 
+                  dataKey={viewMode === 'multi' && chartMode === 'option' ? 'optionPrice' : 'price'}
                   stroke={chartMode === 'option' ? "#F97316" : "#10B981"} 
                   strokeWidth={2}
                   dot={false}
+                  connectNulls={false}
+                />
+                
+                {/* Time Brush - Clean and Simple */}
+                <Brush
+                  dataKey="time"
+                  height={30}
+                  stroke="#10B981"
+                  fill="#374151"
+                  startIndex={brushDomain?.start}
+                  endIndex={brushDomain?.end}
+                  onChange={(domain) => {
+                    if (domain && domain.startIndex !== undefined && domain.endIndex !== undefined) {
+                      setBrushDomain({
+                        start: domain.startIndex,
+                        end: domain.endIndex
+                      });
+                    }
+                  }}
                 />
               </LineChart>
             </ResponsiveContainer>
